@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 
-const GENLAYER_SYSTEM_PROMPT = `You are GenBot, a friendly and knowledgeable assistant for the GenLayer ecosystem. You explain GenLayer concepts in a clear, beginner-friendly way without being overly technical.
+const GENLAYER_CONTEXT = `You are GenBot, a friendly and knowledgeable assistant for the GenLayer ecosystem. You explain GenLayer concepts in a clear, beginner-friendly way without being overly technical.
 
 GenLayer is the first AI-native blockchain that acts as the "Court of the Internet." Key concepts you know deeply:
 
@@ -64,31 +64,45 @@ export default function GenLayerBot() {
 
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      const geminiMessages = updatedMessages
-        .filter(m => m.role !== "system")
-        .map(m => ({
-          role: m.role === "assistant" ? "model" : "user",
-          parts: [{ text: m.content }]
-        }));
+
+      const geminiContents = updatedMessages.map((m, index) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{
+          text: index === 0 && m.role === "user"
+            ? `${GENLAYER_CONTEXT}\n\nUser: ${m.content}`
+            : m.content
+        }]
+      }));
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: GENLAYER_SYSTEM_PROMPT }] },
-            contents: geminiMessages,
-            generationConfig: { maxOutputTokens: 1000, temperature: 0.7 }
+            contents: geminiContents,
+            generationConfig: {
+              maxOutputTokens: 800,
+              temperature: 0.7
+            }
           }),
         }
       );
 
       const data = await response.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't get a response. Try again!";
+
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text
+        || "Sorry, I couldn't get a response. Try again!";
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
-    } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Something went wrong. Please try again!" }]);
+    } catch (err) {
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: `Error: ${err.message}`
+      }]);
     } finally {
       setLoading(false);
     }
@@ -124,7 +138,6 @@ export default function GenLayerBot() {
         .send-btn:disabled{opacity:0.4;cursor:not-allowed;}
       `}</style>
 
-      {/* Header */}
       <div style={{ width: "100%", maxWidth: "680px", marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "6px" }}>
           <div style={{
@@ -159,7 +172,6 @@ export default function GenLayerBot() {
         <div style={{ height: "1px", background: "linear-gradient(90deg, transparent, #1a3a6a, transparent)" }}/>
       </div>
 
-      {/* Chat area */}
       <div style={{
         width: "100%", maxWidth: "680px",
         background: "rgba(10,20,40,0.6)",
@@ -167,9 +179,7 @@ export default function GenLayerBot() {
         borderRadius: "16px",
         display: "flex", flexDirection: "column",
         height: "480px", overflow: "hidden",
-        backdropFilter: "blur(10px)",
       }}>
-        {/* Messages */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
           {messages.map((msg, i) => (
             <div key={i} style={{
@@ -229,7 +239,6 @@ export default function GenLayerBot() {
           <div ref={bottomRef}/>
         </div>
 
-        {/* Input area */}
         <div style={{ padding: "14px 16px", borderTop: "1px solid #0d2040" }}>
           <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
             <textarea
@@ -265,7 +274,6 @@ export default function GenLayerBot() {
         </div>
       </div>
 
-      {/* Suggested questions */}
       <div style={{ width: "100%", maxWidth: "680px", marginTop: "16px" }}>
         <p style={{ fontSize: "11px", color: "#2a4a6a", marginBottom: "10px", letterSpacing: "2px" }}>SUGGESTED QUESTIONS</p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -298,5 +306,5 @@ export default function GenLayerBot() {
       </div>
     </div>
   );
-  }
-  
+        }
+    
